@@ -125,6 +125,7 @@ int main(int argc, char* argv[]) {
 	const char *ccam = "/dev/video1";
 	bool flipHorizontal = false;
 	bool flipVertical   = false;
+	bool blur	    = false;
 
 	const char* modelname = "models/segm_full_v679.tflite";
 
@@ -135,6 +136,8 @@ int main(int argc, char* argv[]) {
 			showUsage = true;
 		} else if (strncmp(argv[arg], "-d", 2)==0) {
 			++debug;
+		} else if (strncmp(argv[arg], "-b", 2)==0) {
+			blur = true;
 		} else if (strncmp(argv[arg], "-H", 2)==0) {
 			flipHorizontal = !flipHorizontal;
 		} else if (strncmp(argv[arg], "-V", 2)==0) {
@@ -207,6 +210,7 @@ int main(int argc, char* argv[]) {
 		fprintf(stderr, "-m            Specify the TFLite model used for segmentation\n");
 		fprintf(stderr, "-H            Mirror the output horizontally\n");
 		fprintf(stderr, "-V            Mirror the output vertically\n");
+		fprintf(stderr, "-b            Blur the background instead of removing it\n");
 		exit(1);
 	}
 
@@ -218,7 +222,7 @@ int main(int argc, char* argv[]) {
 	printf("flip_h: %s\n", flipHorizontal ? "yes" : "no");
 	printf("flip_v: %s\n", flipVertical ? "yes" : "no");
 	printf("threads:%d\n", threads);
-	printf("back:   %s\n", back ? back : "(none)");
+	printf("back:   %s\n", back ? back : blur ? "blur" : "(none)");
 	printf("model:  %s\n\n", modelname);
 
 	cv::Mat bg;
@@ -380,7 +384,17 @@ int main(int argc, char* argv[]) {
 		cv::resize(ofinal,mroi,cv::Size(raw.rows/ratio,raw.rows));
 
 		// copy background over raw cam image using mask
-		bg.copyTo(raw,mask);
+		if(blur)
+		{
+			cv::Mat rgb;
+			cv::cvtColor(raw,rgb,CV_YUV2BGR_YUYV);
+			GaussianBlur(rgb, rgb, cv::Size(0,0), 5, 5);
+			rgb= convert_rgb_to_yuyv(rgb);
+			rgb.copyTo(raw,mask);
+		}
+		else
+			bg.copyTo(raw,mask);
+
 
 		if (flipHorizontal) {
 			//Horizontal mirror destroys color in YUYV, need to detour via RGB
@@ -411,6 +425,7 @@ int main(int argc, char* argv[]) {
 
 		cv::Mat test;
 		cv::cvtColor(raw,test,CV_YUV2BGR_YUYV);
+		cv::imshow("mask.png",mask);
 		cv::imshow("output.png",test);
 		if (cv::waitKey(1) == 'q') break;
 	}
